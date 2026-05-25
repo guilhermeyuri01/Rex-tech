@@ -9,7 +9,7 @@ from telegram.ext import Updater, MessageHandler, Filters, CallbackQueryHandler,
 # =========================
 # CONFIG
 # =========================
-TOKEN = "8993898662:AAG2cNJoFnJwOYv3tPqxD0mtBOub5cOxtoE"
+TOKEN = "8993898662:AAEThBQVbytvrVfgQayffhAyUUxlfIdlfMs"
 GROUP_ID = 5113725387
 
 
