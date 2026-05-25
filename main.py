@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import re
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
 TOKEN = "8993898662:AAG2cNJoFnJwOYv3tPqxD0mtBOub5cOxtoE"
 
@@ -24,10 +24,6 @@ def get_image(soup):
     return None
 
 
-# =========================
-# PREÇO (FALLBACK INTELIGENTE)
-# =========================
-
 def extract_price(soup):
     text = soup.get_text()
 
@@ -45,10 +41,6 @@ def extract_price(soup):
     return None
 
 
-# =========================
-# SCRAPER PRINCIPAL
-# =========================
-
 def scrape_product(url):
     headers = {"User-Agent": "Mozilla/5.0"}
 
@@ -56,7 +48,6 @@ def scrape_product(url):
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # TÍTULO
         title_tag = soup.find("meta", property="og:title")
 
         if title_tag and title_tag.get("content"):
@@ -64,10 +55,7 @@ def scrape_product(url):
         else:
             title = soup.title.string.strip() if soup.title else "Produto não encontrado"
 
-        # IMAGEM
         image = get_image(soup)
-
-        # PREÇO
         price = extract_price(soup)
 
         if not price:
@@ -92,7 +80,7 @@ def scrape_product(url):
 
 
 # =========================
-# FORMATAÇÃO REX TECH
+# FORMATAÇÃO
 # =========================
 
 def format_message(p):
@@ -109,18 +97,17 @@ def format_message(p):
 
 
 # =========================
-# TELEGRAM HANDLER
+# HANDLER (ATUALIZADO PTB v20)
 # =========================
 
-def handle(update: Update, context: CallbackContext):
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
 
     if "http" not in url:
-        update.message.reply_text("Envie um link válido.")
+        await update.message.reply_text("Envie um link válido.")
         return
 
     product = scrape_product(url)
-
     caption = format_message(product)
 
     keyboard = InlineKeyboardMarkup([
@@ -128,23 +115,27 @@ def handle(update: Update, context: CallbackContext):
     ])
 
     if product["image"]:
-        update.message.reply_photo(
+        await update.message.reply_photo(
             photo=product["image"],
             caption=caption,
             reply_markup=keyboard
         )
     else:
-        update.message.reply_text(caption, reply_markup=keyboard)
+        await update.message.reply_text(caption, reply_markup=keyboard)
 
 
 # =========================
-# START BOT
+# START BOT (SEM CONFLITO)
 # =========================
 
-updater = Updater(TOKEN, use_context=True)
-dp = updater.dispatcher
+def main():
+    app = Application.builder().token(TOKEN).build()
 
-dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-updater.start_polling()
-updater.idle()
+    # 🔥 CORREÇÃO DO TEU ERRO
+    app.run_polling(drop_pending_updates=True)
+
+
+if __name__ == "__main__":
+    main()
