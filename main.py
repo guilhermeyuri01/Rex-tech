@@ -61,7 +61,7 @@ def extract_price(soup):
         if match:
             return match.group()
 
-    return None
+    return "Ver no link"
 
 # =========================
 # SCRAPER
@@ -73,12 +73,22 @@ def scrape_product(url):
     }
 
     try:
-        r = requests.get(url, headers=headers, timeout=10)
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=15
+        )
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
 
         # TÍTULO
-        title_tag = soup.find("meta", property="og:title")
+        title_tag = soup.find(
+            "meta",
+            property="og:title"
+        )
 
         if title_tag and title_tag.get("content"):
             title = title_tag["content"]
@@ -94,9 +104,6 @@ def scrape_product(url):
 
         # PREÇO
         price = extract_price(soup)
-
-        if not price:
-            price = "Ver no link"
 
         return {
             "title": title,
@@ -134,11 +141,16 @@ def format_message(p):
 # RECEBER LINK
 # =========================
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_message(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     url = update.message.text
 
     if "http" not in url:
-        await update.message.reply_text("Envie um link válido.")
+        await update.message.reply_text(
+            "Envie um link válido."
+        )
         return
 
     product = scrape_product(url)
@@ -153,6 +165,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "✅ Aprovar",
                 callback_data=f"approve_{msg_id}"
             ),
+
             InlineKeyboardButton(
                 "❌ Recusar",
                 callback_data=f"reject_{msg_id}"
@@ -162,13 +175,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     caption = format_message(product)
 
-    if product["image"]:
-        await update.message.reply_photo(
-            photo=product["image"],
-            caption=caption,
-            reply_markup=keyboard
-        )
-    else:
+    try:
+        if product["image"]:
+            await update.message.reply_photo(
+                photo=product["image"],
+                caption=caption,
+                reply_markup=keyboard
+            )
+        else:
+            await update.message.reply_text(
+                caption,
+                reply_markup=keyboard
+            )
+
+    except Exception as e:
+        print("ERRO FOTO:", e)
+
         await update.message.reply_text(
             caption,
             reply_markup=keyboard
@@ -178,21 +200,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # BOTÕES
 # =========================
 
-async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def buttons(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
 
     await query.answer()
 
     data = query.data
 
+    # =====================
+    # APROVAR
+    # =====================
+
     if data.startswith("approve_"):
-        msg_id = data.replace("approve_", "")
+
+        msg_id = data.replace(
+            "approve_",
+            ""
+        )
 
         product = pending_products.get(msg_id)
 
         if not product:
-            await query.edit_message_caption(
-                caption="Produto expirado."
+            await query.message.reply_text(
+                "Produto expirado."
             )
             return
 
@@ -207,38 +240,47 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         caption = format_message(product)
 
-        if product["image"]:
-            await context.bot.send_photo(
-                chat_id=GROUP_ID,
-                photo=product["image"],
-                caption=caption,
-                reply_markup=keyboard
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=GROUP_ID,
-                text=caption,
-                reply_markup=keyboard
-            )
-
         try:
-            await query.edit_message_caption(
-                caption="✅ Oferta enviada para o grupo!"
-            )
-        except:
-            await query.edit_message_text(
+
+            # ENVIA PRO GRUPO
+            if product["image"]:
+
+                await context.bot.send_photo(
+                    chat_id=GROUP_ID,
+                    photo=product["image"],
+                    caption=caption,
+                    reply_markup=keyboard
+                )
+
+            else:
+
+                await context.bot.send_message(
+                    chat_id=GROUP_ID,
+                    text=caption,
+                    reply_markup=keyboard
+                )
+
+            await query.message.reply_text(
                 "✅ Oferta enviada para o grupo!"
             )
 
+        except Exception as e:
+
+            print("ERRO AO ENVIAR:", e)
+
+            await query.message.reply_text(
+                f"Erro:\n{e}"
+            )
+
+    # =====================
+    # RECUSAR
+    # =====================
+
     elif data.startswith("reject_"):
-        try:
-            await query.edit_message_caption(
-                caption="❌ Oferta recusada."
-            )
-        except:
-            await query.edit_message_text(
-                "❌ Oferta recusada."
-            )
+
+        await query.message.reply_text(
+            "❌ Oferta recusada."
+        )
 
 # =========================
 # START BOT
@@ -246,6 +288,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 app = Application.builder().token(TOKEN).build()
 
+# RECEBER LINKS
 app.add_handler(
     MessageHandler(
         filters.TEXT & ~filters.COMMAND,
@@ -253,9 +296,21 @@ app.add_handler(
     )
 )
 
+# BOTÕES
 app.add_handler(
     CallbackQueryHandler(buttons)
 )
 
+# =========================
+# ONLINE
+# =========================
+
 if __name__ == "__main__":
-    app.run_polling(drop_pending_updates=True)
+
+    print("BOT ONLINE...")
+
+    app.run_polling(
+        poll_interval=2,
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
+    )
