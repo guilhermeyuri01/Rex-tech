@@ -31,20 +31,32 @@ def scrape_product(url):
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # TÍTULO
+        # ===== TÍTULO MELHORADO =====
         title_tag = soup.find("meta", property="og:title")
         if title_tag and title_tag.get("content"):
             title = title_tag["content"]
         else:
             title = soup.title.string if soup.title else "Produto"
 
-        # IMAGEM
+        # ===== IMAGEM =====
         image = get_image(soup)
 
-        # PREÇO (simples fallback)
+        # ===== PREÇO MELHORADO =====
         text = soup.get_text()
-        match = re.search(r"R\$\s?\d+[.,]?\d*", text)
-        price = match.group() if match else "Não encontrado"
+
+        patterns = [
+            r"R\$\s?\d+[.,]?\d*",
+            r"\$\s?\d+[.,]?\d*",
+            r"\d+[.,]\d{2}"
+        ]
+
+        price = "Não encontrado"
+
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                price = match.group()
+                break
 
         return {
             "title": title,
@@ -64,7 +76,7 @@ def scrape_product(url):
 
 
 # =========================
-# FORMATADOR REX TECH
+# FORMATAÇÃO REX TECH
 # =========================
 
 def format_message(p):
@@ -73,7 +85,7 @@ def format_message(p):
 
 📦 {p['title']}
 💰 {p['price']}
-🔥 Oferta automática verificada
+🏷 Cupom disponível: REXTECH
 
 ━━━━━━━━━━━━━━
 🧬 Rex Tech Bot
@@ -99,7 +111,6 @@ def handle(update: Update, context: CallbackContext):
         [InlineKeyboardButton("🛒 Comprar agora", url=product["link"])]
     ])
 
-    # Se tiver imagem manda foto
     if product["image"]:
         update.message.reply_photo(
             photo=product["image"],
