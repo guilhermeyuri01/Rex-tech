@@ -1,46 +1,42 @@
-import requests
+            import requests
 from bs4 import BeautifulSoup
+import re
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
 TOKEN = "8993898662:AAG2cNJoFnJwOYv3tPqxD0mtBOub5cOxtoE"
 
 # -------- SCRAPER --------
 def scrape_product(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     r = requests.get(url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # Nome
     title = soup.title.string if soup.title else "Produto"
 
-    # Imagem principal
-    image = ""
-    img_tag = soup.find("meta", property="og:image")
-    if img_tag:
-        image = img_tag.get("content")
+    img = ""
+    meta_img = soup.find("meta", property="og:image")
+    if meta_img:
+        img = meta_img.get("content")
 
-    # Tenta achar preço no texto (simples)
     text = soup.get_text()
     price = "Não encontrado"
 
-    import re
     match = re.search(r"R\$\s?\d+[\.,]?\d*", text)
     if match:
         price = match.group()
 
     return {
         "title": title,
-        "image": image,
+        "image": img,
         "price": price,
         "link": url
     }
 
-# -------- FORMATADOR CYBERPUNK --------
-def format_message(p):
+# -------- FORMAT --------
+def format_msg(p):
     return f"""
 ⚡ REX TECH DEAL ⚡
 
@@ -49,36 +45,38 @@ def format_message(p):
 🔥 Oferta automática
 
 ━━━━━━━━━━━━━━
-🧬 Powered by Rex Tech
+🧬 Rex Tech
 """
 
-# -------- HANDLER TELEGRAM --------
-async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# -------- HANDLER --------
+def handle(update: Update, context: CallbackContext):
     url = update.message.text
 
-    if "aliexpress" not in url and "http" not in url:
-        await update.message.reply_text("Envie um link válido.")
+    if "http" not in url:
+        update.message.reply_text("Envie um link válido.")
         return
 
-    product = scrape_product(url)
+    p = scrape_product(url)
+    msg = format_msg(p)
 
-    caption = format_message(product)
-
-    button = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛒 Comprar agora", url=product["link"])]
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🛒 Comprar agora", url=p["link"])]
     ])
 
-    if product["image"]:
-        await update.message.reply_photo(
-            photo=product["image"],
-            caption=caption,
-            reply_markup=button
+    if p["image"]:
+        update.message.reply_photo(
+            photo=p["image"],
+            caption=msg,
+            reply_markup=keyboard
         )
     else:
-        await update.message.reply_text(caption, reply_markup=button)
+        update.message.reply_text(msg, reply_markup=keyboard)
 
-# -------- RUN BOT --------
-app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
+# -------- RUN --------
+updater = Updater(TOKEN, use_context=True)
+dp = updater.dispatcher
 
-app.run_polling()
+dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle))
+
+updater.start_polling()
+updater.idle()
