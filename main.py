@@ -1,4 +1,4 @@
-import requests
+    import requests
 from bs4 import BeautifulSoup
 import re
 
@@ -6,12 +6,15 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, MessageHandler, Filters, CallbackQueryHandler, CallbackContext
 
 
+# =========================
+# CONFIG
+# =========================
 TOKEN = "8993898662:AAG2cNJoFnJwOYv3tPqxD0mtBOub5cOxtoE"
-GROUP_ID = -5113725387
+GROUP_ID = 5113725387
 
 
 # =========================
-# ARMAZENAMENTO TEMPORÁRIO
+# DADOS TEMPORÁRIOS
 # =========================
 pending_offers = {}
 offer_id = 0
@@ -27,12 +30,18 @@ def scrape_product(url):
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
 
+        # TÍTULO
         title_tag = soup.find("meta", property="og:title")
-        title = title_tag["content"] if title_tag else (soup.title.string if soup.title else "Sem título")
+        if title_tag and title_tag.get("content"):
+            title = title_tag["content"]
+        else:
+            title = soup.title.string.strip() if soup.title else "Sem título"
 
+        # IMAGEM
         img = soup.find("meta", property="og:image")
         image = img["content"] if img else None
 
+        # PREÇO (fallback simples)
         price_match = re.search(r"R\$\s?\d+[.,]?\d*", soup.get_text())
         price = price_match.group() if price_match else "Ver no link"
 
@@ -44,7 +53,7 @@ def scrape_product(url):
         }
 
     except Exception as e:
-        print("Erro scraper:", e)
+        print("SCRAPER ERROR:", e)
         return {
             "title": "Erro ao carregar produto",
             "price": "Ver no link",
@@ -68,7 +77,7 @@ def format_offer(p):
 
 
 # =========================
-# MENSAGEM DO USUÁRIO
+# MENSAGEM RECEBIDA
 # =========================
 def handle(update: Update, context: CallbackContext):
     global offer_id
@@ -76,19 +85,21 @@ def handle(update: Update, context: CallbackContext):
     url = update.message.text
 
     if "http" not in url:
-        update.message.reply_text("Envie um link válido.")
+        update.message.reply_text("❌ Envie um link válido.")
         return
 
     product = scrape_product(url)
 
     offer_id += 1
-    pending_offers[str(offer_id)] = product
+    current_id = str(offer_id)
+
+    pending_offers[current_id] = product
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Aceitar", callback_data=f"accept_{offer_id}"),
-            InlineKeyboardButton("✏️ Editar", callback_data=f"edit_{offer_id}"),
-            InlineKeyboardButton("❌ Recusar", callback_data=f"reject_{offer_id}")
+            InlineKeyboardButton("✅ Aceitar", callback_data=f"accept_{current_id}"),
+            InlineKeyboardButton("✏️ Editar", callback_data=f"edit_{current_id}"),
+            InlineKeyboardButton("❌ Recusar", callback_data=f"reject_{current_id}")
         ]
     ])
 
@@ -110,41 +121,73 @@ def handle(update: Update, context: CallbackContext):
 
 
 # =========================
-# BOTÕES
+# BOTÕES (CORRIGIDO)
 # =========================
 def button(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
 
-    action, id_ = query.data.split("_")
+    data = query.data
+
+    print("CALLBACK RECEBIDO:", data)  # DEBUG
+
+    if "_" not in data:
+        query.edit_message_text("❌ Erro no botão.")
+        return
+
+    action, id_ = data.split("_")
+
     product = pending_offers.get(id_)
 
     if not product:
-        query.edit_message_text("Oferta expirada.")
+        query.edit_message_text("⚠️ Oferta expirada.")
         return
 
+    # =========================
+    # ACEITAR
+    # =========================
     if action == "accept":
         msg = format_offer(product)
 
-        context.bot.send_message(chat_id=GROUP_ID, text=msg)
+        try:
+            context.bot.send_message(
+                chat_id=GROUP_ID,
+                text=msg
+            )
 
-        query.edit_message_text("✅ Publicado no grupo!")
+            query.edit_message_text("✅ Publicado no grupo!")
 
+        except Exception as e:
+            print("ERRO AO ENVIAR NO GRUPO:", e)
+            query.edit_message_text("❌ Erro ao enviar no grupo")
+
+    # =========================
+    # RECUSAR
+    # =========================
     elif action == "reject":
-        query.edit_message_text("❌ Recusado.")
+        query.edit_message_text("❌ Oferta recusada")
 
+    # =========================
+    # EDITAR (ainda básico)
+    # =========================
     elif action == "edit":
-        query.edit_message_text("✏️ Edição ainda não implementada.")
+        query.edit_message_text("✏️ Edição ainda não implementada")
 
 
 # =========================
 # START BOT
 # =========================
-updater = Updater(TOKEN, use_context=True)
+def main():
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-dp = updater.dispatcher
-dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle))
-dp.add_handler(CallbackQueryHandler(button))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle))
+    dp.add_handler(CallbackQueryHandler(button))
 
-updater.start_polling()
-updater.idle()
+    print("🤖 Bot rodando...")
+    updater.start_polling()
+    updater.idle()
+
+
+if __name__ == "__main__":
+    main()
