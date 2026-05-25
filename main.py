@@ -9,11 +9,11 @@ from telegram import (
 )
 
 from telegram.ext import (
-    Updater,
+    Application,
     MessageHandler,
-    Filters,
-    CallbackContext,
-    CallbackQueryHandler
+    CallbackQueryHandler,
+    ContextTypes,
+    filters
 )
 
 # =========================
@@ -22,6 +22,7 @@ from telegram.ext import (
 
 TOKEN = "8993898662:AAFEPMd414DDI767a71F65MT3wqutBaVMH4"
 
+ADMIN_ID = 123456789
 GROUP_ID = -5113725387
 
 
@@ -66,7 +67,6 @@ def scrape_product(url):
 
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # título
         title_tag = soup.find("meta", property="og:title")
 
         if title_tag and title_tag.get("content"):
@@ -74,10 +74,8 @@ def scrape_product(url):
         else:
             title = soup.title.string.strip()
 
-        # imagem
         image = get_image(soup)
 
-        # preço
         price = extract_price(soup)
 
         return {
@@ -110,9 +108,6 @@ def format_message(product):
 
 💰 {product['price']}
 
-🛒 Link:
-{product['link']}
-
 ━━━━━━━━━━━━━━
 🧬 Rex Tech Deals
 """
@@ -122,11 +117,11 @@ def format_message(product):
 # RECEBER LINK
 # =========================
 
-def handle(update: Update, context: CallbackContext):
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
 
     if "http" not in url:
-        update.message.reply_text("Envie um link válido.")
+        await update.message.reply_text("Envie um link válido.")
         return
 
     product = scrape_product(url)
@@ -148,7 +143,8 @@ def handle(update: Update, context: CallbackContext):
     ])
 
     if product["image"]:
-        context.bot.send_photo(
+
+        await context.bot.send_photo(
             chat_id=ADMIN_ID,
             photo=product["image"],
             caption=text,
@@ -156,23 +152,27 @@ def handle(update: Update, context: CallbackContext):
         )
 
     else:
-        context.bot.send_message(
+
+        await context.bot.send_message(
             chat_id=ADMIN_ID,
             text=text,
             reply_markup=keyboard
         )
 
-    update.message.reply_text("✅ Oferta enviada para aprovação.")
+    await update.message.reply_text(
+        "✅ Oferta enviada para aprovação."
+    )
 
 
 # =========================
 # BOTÕES
 # =========================
 
-def button_click(update: Update, context: CallbackContext):
+async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     query = update.callback_query
 
-    query.answer()
+    await query.answer()
 
     data = query.data
 
@@ -198,7 +198,7 @@ def button_click(update: Update, context: CallbackContext):
 
             if product["image"]:
 
-                context.bot.send_photo(
+                await context.bot.send_photo(
                     chat_id=GROUP_ID,
                     photo=product["image"],
                     caption=text,
@@ -207,47 +207,47 @@ def button_click(update: Update, context: CallbackContext):
 
             else:
 
-                context.bot.send_message(
+                await context.bot.send_message(
                     chat_id=GROUP_ID,
                     text=text,
                     reply_markup=keyboard
                 )
 
-            query.edit_message_text("✅ Oferta aprovada e enviada.")
+            await query.edit_message_text(
+                "✅ Oferta aprovada e enviada."
+            )
 
         except Exception as e:
 
-            query.edit_message_text(f"Erro: {e}")
+            await query.edit_message_text(
+                f"Erro: {e}"
+            )
 
     # RECUSAR
     elif data == "reject":
 
-        query.edit_message_text("❌ Oferta recusada.")
+        await query.edit_message_text(
+            "❌ Oferta recusada."
+        )
 
 
 # =========================
 # START
 # =========================
 
-updater = Updater(TOKEN, use_context=True)
+app = Application.builder().token(TOKEN).build()
 
-# remove webhook antigo
-updater.bot.delete_webhook(drop_pending_updates=True)
-
-dp = updater.dispatcher
-
-dp.add_handler(
+app.add_handler(
     MessageHandler(
-        Filters.text & ~Filters.command,
+        filters.TEXT & ~filters.COMMAND,
         handle
     )
 )
 
-dp.add_handler(
+app.add_handler(
     CallbackQueryHandler(button_click)
 )
 
 print("BOT ONLINE")
 
-updater.start_polling(drop_pending_updates=True)
-updater.idle()
+app.run_polling(drop_pending_updates=True)
