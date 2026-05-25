@@ -22,15 +22,18 @@ from telegram.ext import (
 
 TOKEN = "8993898662:AAFEPMd414DDI767a71F65MT3wqutBaVMH4"
 
-ADMIN_ID = 123456789
+# pega no @userinfobot
+ADMIN_ID = RexTech
+# seu grupo
 GROUP_ID = -5113725387
 
 
 # =========================
-# SCRAPER
+# PEGAR IMAGEM
 # =========================
 
 def get_image(soup):
+
     img = soup.find("meta", property="og:image")
 
     if img and img.get("content"):
@@ -39,7 +42,12 @@ def get_image(soup):
     return None
 
 
+# =========================
+# PEGAR PREÇO
+# =========================
+
 def extract_price(soup):
+
     text = soup.get_text()
 
     patterns = [
@@ -49,6 +57,7 @@ def extract_price(soup):
     ]
 
     for p in patterns:
+
         match = re.search(p, text)
 
         if match:
@@ -57,25 +66,51 @@ def extract_price(soup):
     return "Ver no link"
 
 
+# =========================
+# SCRAPER
+# =========================
+
 def scrape_product(url):
+
     headers = {
         "User-Agent": "Mozilla/5.0"
     }
 
     try:
-        r = requests.get(url, headers=headers, timeout=15)
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=15
+        )
 
-        title_tag = soup.find("meta", property="og:title")
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
+
+        # título
+        title_tag = soup.find(
+            "meta",
+            property="og:title"
+        )
 
         if title_tag and title_tag.get("content"):
-            title = title_tag["content"]
-        else:
-            title = soup.title.string.strip()
 
+            title = title_tag["content"]
+
+        else:
+
+            title = (
+                soup.title.string.strip()
+                if soup.title
+                else "Produto"
+            )
+
+        # imagem
         image = get_image(soup)
 
+        # preço
         price = extract_price(soup)
 
         return {
@@ -86,7 +121,8 @@ def scrape_product(url):
         }
 
     except Exception as e:
-        print("ERRO:", e)
+
+        print("ERRO SCRAPER:", e)
 
         return {
             "title": "Erro ao pegar produto",
@@ -97,16 +133,20 @@ def scrape_product(url):
 
 
 # =========================
-# FORMATAÇÃO
+# TEXTO
 # =========================
 
 def format_message(product):
+
     return f"""
 🔥 OFERTA ENCONTRADA 🔥
 
 📦 {product['title']}
 
 💰 {product['price']}
+
+🛒 Link:
+{product['link']}
 
 ━━━━━━━━━━━━━━
 🧬 Rex Tech Deals
@@ -117,11 +157,21 @@ def format_message(product):
 # RECEBER LINK
 # =========================
 
-async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    print("MENSAGEM RECEBIDA")
+
     url = update.message.text
 
     if "http" not in url:
-        await update.message.reply_text("Envie um link válido.")
+
+        await update.message.reply_text(
+            "Envie um link válido."
+        )
+
         return
 
     product = scrape_product(url)
@@ -142,6 +192,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ])
 
+    # envia pro admin aprovar
     if product["image"]:
 
         await context.bot.send_photo(
@@ -168,7 +219,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # BOTÕES
 # =========================
 
-async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_click(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     query = update.callback_query
 
@@ -176,7 +230,10 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
+    # =====================
     # APROVAR
+    # =====================
+
     if data.startswith("approve"):
 
         url = data.split("|")[1]
@@ -196,6 +253,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
 
+            # manda no grupo
             if product["image"]:
 
                 await context.bot.send_photo(
@@ -223,7 +281,10 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Erro: {e}"
             )
 
+    # =====================
     # RECUSAR
+    # =====================
+
     elif data == "reject":
 
         await query.edit_message_text(
@@ -234,6 +295,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 # START
 # =========================
+
+print("INICIANDO BOT...")
 
 app = Application.builder().token(TOKEN).build()
 
@@ -248,6 +311,8 @@ app.add_handler(
     CallbackQueryHandler(button_click)
 )
 
-print("BOT ONLINE")
+print("BOT ONLINE COM SUCESSO")
 
-app.run_polling(drop_pending_updates=True)
+app.run_polling(
+    drop_pending_updates=True
+    )
