@@ -1,20 +1,16 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, MessageHandler, Filters
 
 TOKEN = "8993898662:AAG2cNJoFnJwOYv3tPqxD0mtBOub5cOxtoE"
 
-async def receber(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto = """
-🔥 OFERTA TECH 🔥
+def receber(update, context):
+    update.message.reply_text("🔥 Bot funcionando!")
 
-💰 Bot funcionando!
-"""
+updater = Updater(TOKEN, use_context=True)
 
-    await update.message.reply_text(texto)
+dp = updater.dispatcher
 
-app = ApplicationBuilder().token(TOKEN).build()
-
-app.add_handler(MessageHandler(filters.TEXT, receber))
+dp.add_handler(MessageHandler(Filters.text, receber))
 
 print("Bot online...")
-app.run_polling()
+updater.start_polling()
+updater.idle()
