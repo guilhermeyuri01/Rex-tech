@@ -1,65 +1,15 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-import json
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
+
 TOKEN = "8993898662:AAG2cNJoFnJwOYv3tPqxD0mtBOub5cOxtoE"
 
 
 # =========================
-# IMAGEM
-# =========================
-
-def get_image(soup):
-    img = soup.find("meta", property="og:image")
-    if img and img.get("content"):
-        return img["content"]
-
-    img = soup.find("meta", attrs={"name": "og:image"})
-    if img and img.get("content"):
-        return img["content"]
-
-    return None
-
-
-# =========================
-# PREÇO MELHORADO
-# =========================
-
-def extract_price(soup):
-    text = soup.get_text()
-
-    # 1. regex comum
-    patterns = [
-        r"R\$\s?\d+[.,]?\d*",
-        r"\$\s?\d+[.,]?\d*",
-        r"\d+[.,]\d{2}"
-    ]
-
-    for p in patterns:
-        match = re.search(p, text)
-        if match:
-            return match.group()
-
-    # 2. tenta achar em scripts (mais forte)
-    scripts = soup.find_all("script")
-
-    for s in scripts:
-        if s.string:
-            if "price" in s.string.lower():
-                try:
-                    data = json.loads(s.string)
-                    return str(data)
-                except:
-                    continue
-
-    return "Não encontrado"
-
-
-# =========================
-# SCRAPER
+# SCRAPER SEGURO
 # =========================
 
 def scrape_product(url):
@@ -69,18 +19,37 @@ def scrape_product(url):
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # título
+        # =====================
+        # TÍTULO
+        # =====================
         title_tag = soup.find("meta", property="og:title")
+
         if title_tag and title_tag.get("content"):
             title = title_tag["content"]
         else:
-            title = soup.title.string if soup.title else "Produto"
+            title = soup.title.string.strip() if soup.title else "Produto não encontrado"
 
-        # imagem
-        image = get_image(soup)
+        # =====================
+        # IMAGEM
+        # =====================
+        img_tag = soup.find("meta", property="og:image")
 
-        # preço
-        price = extract_price(soup)
+        if img_tag and img_tag.get("content"):
+            image = img_tag["content"]
+        else:
+            image = None
+
+        # =====================
+        # PREÇO (BÁSICO E ESTÁVEL)
+        # =====================
+        text = soup.get_text()
+
+        match = re.search(r"R\$\s?\d+[.,]?\d*", text)
+
+        if match:
+            price = match.group()
+        else:
+            price = "Ver no link"
 
         return {
             "title": title,
@@ -90,17 +59,18 @@ def scrape_product(url):
         }
 
     except Exception as e:
-        print("ERROR:", e)
+        print("SCRAP ERROR:", e)
+
         return {
             "title": "Erro ao carregar produto",
             "image": None,
-            "price": "?",
+            "price": "Ver no link",
             "link": url
         }
 
 
 # =========================
-# MENSAGEM REX TECH
+# FORMATAÇÃO REX TECH
 # =========================
 
 def format_message(p):
@@ -117,7 +87,7 @@ def format_message(p):
 
 
 # =========================
-# TELEGRAM HANDLER
+# HANDLER TELEGRAM
 # =========================
 
 def handle(update: Update, context: CallbackContext):
@@ -135,6 +105,7 @@ def handle(update: Update, context: CallbackContext):
         [InlineKeyboardButton("🛒 Comprar agora", url=product["link"])]
     ])
 
+    # Se tiver imagem manda foto
     if product["image"]:
         update.message.reply_photo(
             photo=product["image"],
@@ -146,7 +117,7 @@ def handle(update: Update, context: CallbackContext):
 
 
 # =========================
-# RUN BOT
+# START BOT
 # =========================
 
 updater = Updater(TOKEN, use_context=True)
