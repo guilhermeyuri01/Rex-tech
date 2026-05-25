@@ -23,7 +23,7 @@ from telegram.ext import (
 TOKEN = "8993898662:AAFEPMd414DDI767a71F65MT3wqutBaVMH4"
 
 # pega no @userinfobot
-ADMIN_ID = RexTech
+ADMIN_ID = 7198780258
 # seu grupo
 GROUP_ID = -5113725387
 
