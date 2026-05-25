@@ -66,7 +66,13 @@ def extract_price(soup):
 def scrape_product(url):
 
     headers = {
-        "User-Agent": "Mozilla/5.0"
+        "User-Agent": (
+            "Mozilla/5.0 "
+            "(Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 "
+            "(KHTML, like Gecko) "
+            "Chrome/122.0 Safari/537.36"
+        )
     }
 
     try:
@@ -74,31 +80,95 @@ def scrape_product(url):
         r = requests.get(
             url,
             headers=headers,
-            timeout=10
+            timeout=15
         )
 
         soup = BeautifulSoup(r.text, "html.parser")
 
-        title_tag = soup.find(
-            "meta",
-            property="og:title"
-        )
+        # =========================
+        # TÍTULO
+        # =========================
 
-        if title_tag and title_tag.get("content"):
+        title = "Produto"
 
-            title = title_tag["content"]
+        title_selectors = [
+            ("meta", {"property": "og:title"}),
+            ("meta", {"name": "og:title"}),
+            ("meta", {"name": "title"})
+        ]
 
-        else:
+        for tag, attrs in title_selectors:
 
-            title = (
-                soup.title.string.strip()
-                if soup.title
-                else "Produto"
-            )
+            item = soup.find(tag, attrs=attrs)
 
-        image = get_image(soup)
+            if item and item.get("content"):
 
-        price = extract_price(soup)
+                title = item["content"].strip()
+                break
+
+        if title == "Produto":
+
+            h1 = soup.find("h1")
+
+            if h1:
+                title = h1.get_text().strip()
+
+        # =========================
+        # IMAGEM
+        # =========================
+
+        image = None
+
+        image_selectors = [
+            ("meta", {"property": "og:image"}),
+            ("meta", {"name": "og:image"})
+        ]
+
+        for tag, attrs in image_selectors:
+
+            item = soup.find(tag, attrs=attrs)
+
+            if item and item.get("content"):
+
+                image = item["content"]
+                break
+
+        # =========================
+        # PREÇO
+        # =========================
+
+        price = None
+
+        html = soup.prettify()
+
+        patterns = [
+
+            r'R\$\s?\d+[.,]\d{2}',
+
+            r'"salePrice":"(.*?)"',
+
+            r'"price":"(.*?)"',
+
+            r'"minPrice":"(.*?)"',
+
+            r'"maxPrice":"(.*?)"'
+        ]
+
+        for pattern in patterns:
+
+            match = re.search(pattern, html)
+
+            if match:
+
+                price = match.group(1)
+
+                if not str(price).startswith("R$"):
+                    price = f"R$ {price}"
+
+                break
+
+        if not price:
+            price = "Ver no link"
 
         return {
             "title": title,
@@ -109,13 +179,16 @@ def scrape_product(url):
 
     except Exception as e:
 
-        print("ERRO:", e)
+        print("SCRAPER ERROR:", e)
 
         return {
-            "title": "Erro ao pegar produto",
+            "title": "Erro ao carregar produto",
             "image": None,
             "price": "Ver no link",
             "link": url
+        }
+
+    l
         }
 
 # =========================
