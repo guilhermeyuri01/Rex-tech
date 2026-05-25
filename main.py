@@ -21,7 +21,7 @@ from telegram.ext import (
 # =========================
 
 TOKEN = "8993898662:AAEThBQVbytvrVfgQayffhAyUUxlfIdlfMs"
-GROUP_ID = 5113725387
+GROUP_ID = -5113725387
 
 pending_products = {}
 
