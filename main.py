@@ -20,13 +20,9 @@ from telegram.ext import (
 # CONFIG
 # =========================
 
-TOKEN = "8993898662:AAFEPMd414DDI767a71F65MT3wqutBaVMH4"
-
-# pega no @userinfobot
-ADMIN_ID = 7198780258
-# seu grupo
+TOKEN = ":8993898662:AAFEPMd414DDI767a71F65MT3wqutBaVMH4"
 GROUP_ID = -1003761262254
-
+ADMIN_ID = 7198780258
 
 # =========================
 # PEGAR IMAGEM
@@ -41,7 +37,6 @@ def get_image(soup):
 
     return None
 
-
 # =========================
 # PEGAR PREÇO
 # =========================
@@ -52,7 +47,6 @@ def extract_price(soup):
 
     patterns = [
         r"R\$\s?\d+[.,]?\d*",
-        r"\$\s?\d+[.,]?\d*",
         r"\d+[.,]\d{2}"
     ]
 
@@ -63,8 +57,7 @@ def extract_price(soup):
         if match:
             return match.group()
 
-    return "Ver no link"
-
+    return "Preço não encontrado"
 
 # =========================
 # SCRAPER
@@ -81,15 +74,11 @@ def scrape_product(url):
         r = requests.get(
             url,
             headers=headers,
-            timeout=15
+            timeout=10
         )
 
-        soup = BeautifulSoup(
-            r.text,
-            "html.parser"
-        )
+        soup = BeautifulSoup(r.text, "html.parser")
 
-        # título
         title_tag = soup.find(
             "meta",
             property="og:title"
@@ -107,10 +96,8 @@ def scrape_product(url):
                 else "Produto"
             )
 
-        # imagem
         image = get_image(soup)
 
-        # preço
         price = extract_price(soup)
 
         return {
@@ -122,7 +109,7 @@ def scrape_product(url):
 
     except Exception as e:
 
-        print("ERRO SCRAPER:", e)
+        print("ERRO:", e)
 
         return {
             "title": "Erro ao pegar produto",
@@ -131,89 +118,145 @@ def scrape_product(url):
             "link": url
         }
 
-
 # =========================
-# TEXTO
+# FORMATAR MSG
 # =========================
 
-def format_message(product):
+def format_message(p):
 
     return f"""
 🔥 OFERTA ENCONTRADA 🔥
 
-📦 {product['title']}
+📦 {p['title']}
 
-💰 {product['price']}
+💰 {p['price']}
 
-🛒 Link:
-{product['link']}
-
-━━━━━━━━━━━━━━
-🧬 Rex Tech Deals
+🛒 Link da oferta abaixo
 """
 
-
 # =========================
-# RECEBER LINK
+# MENSAGEM
 # =========================
 
-async def handle(
+async def handle_message(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    print("MENSAGEM RECEBIDA")
+    # =========================
+    # PREÇO MANUAL
+    # =========================
 
-    url = update.message.text
+    if context.user_data.get("waiting_manual_price"):
 
-    if "http" not in url:
+        context.user_data["waiting_manual_price"] = False
 
-        await update.message.reply_text(
-            "Envie um link válido."
+        product = context.user_data.get(
+            "pending_product"
         )
+
+        if not product:
+
+            await update.message.reply_text(
+                "Nenhum produto pendente."
+            )
+
+            return
+
+        product["price"] = f"R$ {update.message.text}"
+
+        context.user_data["pending_product"] = product
+
+        text = format_message(product)
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "✅ Aprovar",
+                    callback_data=f"approve|{product['link']}"
+                ),
+
+                InlineKeyboardButton(
+                    "❌ Recusar",
+                    callback_data="reject"
+                )
+            ]
+        ])
+
+        if product["image"]:
+
+            await update.message.reply_photo(
+                photo=product["image"],
+                caption=text,
+                reply_markup=keyboard
+            )
+
+        else:
+
+            await update.message.reply_text(
+                text,
+                reply_markup=keyboard
+            )
 
         return
 
-    product = scrape_product(url)
+    # =========================
+    # LINK
+    # =========================
 
-    text = format_message(product)
+    if update.message.text:
 
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "✅ Aprovar",
-                callback_data=f"approve|{url}"
-            ),
+        url = update.message.text
 
-            InlineKeyboardButton(
-                "❌ Recusar",
-                callback_data="reject"
+        if "http" not in url:
+
+            await update.message.reply_text(
+                "Envie um link válido."
             )
-        ]
-    ])
 
-    # envia pro admin aprovar
-    if product["image"]:
+            return
 
-        await context.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=product["image"],
-            caption=text,
-            reply_markup=keyboard
-        )
+        product = scrape_product(url)
 
-    else:
+        context.user_data["pending_product"] = product
 
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=text,
-            reply_markup=keyboard
-        )
+        text = format_message(product)
 
-    await update.message.reply_text(
-        "✅ Oferta enviada para aprovação."
-    )
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "✅ Aprovar",
+                    callback_data=f"approve|{url}"
+                ),
 
+                InlineKeyboardButton(
+                    "❌ Recusar",
+                    callback_data="reject"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "💰 Editar preço",
+                    callback_data="manual_price"
+                )
+            ]
+        ])
+
+        if product["image"]:
+
+            await update.message.reply_photo(
+                photo=product["image"],
+                caption=text,
+                reply_markup=keyboard
+            )
+
+        else:
+
+            await update.message.reply_text(
+                text,
+                reply_markup=keyboard
+            )
 
 # =========================
 # BOTÕES
@@ -230,15 +273,23 @@ async def button_click(
 
     data = query.data
 
-    # =====================
+    # =========================
     # APROVAR
-    # =====================
+    # =========================
 
     if data.startswith("approve"):
 
-        url = data.split("|")[1]
+        product = context.user_data.get(
+            "pending_product"
+        )
 
-        product = scrape_product(url)
+        if not product:
+
+            await query.message.reply_text(
+                "Produto não encontrado."
+            )
+
+            return
 
         text = format_message(product)
 
@@ -253,7 +304,6 @@ async def button_click(
 
         try:
 
-            # manda no grupo
             if product["image"]:
 
                 await context.bot.send_photo(
@@ -271,39 +321,68 @@ async def button_click(
                     reply_markup=keyboard
                 )
 
-            await query.edit_message_text(
-                "✅ Oferta aprovada e enviada."
+            await query.edit_message_caption(
+                caption="✅ Oferta enviada pro grupo."
             )
 
         except Exception as e:
 
-            await query.edit_message_text(
-                f"Erro: {e}"
-            )
+            print(e)
 
-    # =====================
+            try:
+
+                await query.edit_message_caption(
+                    caption=f"❌ Erro:\n{e}"
+                )
+
+            except:
+
+                await query.edit_message_text(
+                    f"❌ Erro:\n{e}"
+                )
+
+    # =========================
     # RECUSAR
-    # =====================
+    # =========================
 
     elif data == "reject":
 
-        await query.edit_message_text(
-            "❌ Oferta recusada."
-        )
+        try:
 
+            await query.edit_message_caption(
+                caption="❌ Oferta recusada."
+            )
+
+        except:
+
+            await query.edit_message_text(
+                "❌ Oferta recusada."
+            )
+
+    # =========================
+    # EDITAR PREÇO
+    # =========================
+
+    elif data == "manual_price":
+
+        context.user_data[
+            "waiting_manual_price"
+        ] = True
+
+        await query.message.reply_text(
+            "Envie o novo preço.\n\nExemplo:\n129,90"
+        )
 
 # =========================
 # START
 # =========================
-
-print("INICIANDO BOT...")
 
 app = Application.builder().token(TOKEN).build()
 
 app.add_handler(
     MessageHandler(
         filters.TEXT & ~filters.COMMAND,
-        handle
+        handle_message
     )
 )
 
@@ -311,8 +390,8 @@ app.add_handler(
     CallbackQueryHandler(button_click)
 )
 
-print("BOT ONLINE COM SUCESSO")
+print("BOT ONLINE")
 
 app.run_polling(
     drop_pending_updates=True
-    )
+        )
