@@ -9,7 +9,44 @@ TOKEN = "8993898662:AAG2cNJoFnJwOYv3tPqxD0mtBOub5cOxtoE"
 
 
 # =========================
-# SCRAPER SEGURO
+# SCRAPER
+# =========================
+
+def get_image(soup):
+    img = soup.find("meta", property="og:image")
+    if img and img.get("content"):
+        return img["content"]
+
+    img = soup.find("meta", attrs={"name": "og:image"})
+    if img and img.get("content"):
+        return img["content"]
+
+    return None
+
+
+# =========================
+# PREÇO (FALLBACK INTELIGENTE)
+# =========================
+
+def extract_price(soup):
+    text = soup.get_text()
+
+    patterns = [
+        r"R\$\s?\d+[.,]?\d*",
+        r"\$\s?\d+[.,]?\d*",
+        r"\d+[.,]\d{2}"
+    ]
+
+    for p in patterns:
+        match = re.search(p, text)
+        if match:
+            return match.group()
+
+    return None
+
+
+# =========================
+# SCRAPER PRINCIPAL
 # =========================
 
 def scrape_product(url):
@@ -19,9 +56,7 @@ def scrape_product(url):
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # =====================
         # TÍTULO
-        # =====================
         title_tag = soup.find("meta", property="og:title")
 
         if title_tag and title_tag.get("content"):
@@ -29,26 +64,13 @@ def scrape_product(url):
         else:
             title = soup.title.string.strip() if soup.title else "Produto não encontrado"
 
-        # =====================
         # IMAGEM
-        # =====================
-        img_tag = soup.find("meta", property="og:image")
+        image = get_image(soup)
 
-        if img_tag and img_tag.get("content"):
-            image = img_tag["content"]
-        else:
-            image = None
+        # PREÇO
+        price = extract_price(soup)
 
-        # =====================
-        # PREÇO (BÁSICO E ESTÁVEL)
-        # =====================
-        text = soup.get_text()
-
-        match = re.search(r"R\$\s?\d+[.,]?\d*", text)
-
-        if match:
-            price = match.group()
-        else:
+        if not price:
             price = "Ver no link"
 
         return {
@@ -87,7 +109,7 @@ def format_message(p):
 
 
 # =========================
-# HANDLER TELEGRAM
+# TELEGRAM HANDLER
 # =========================
 
 def handle(update: Update, context: CallbackContext):
@@ -105,7 +127,6 @@ def handle(update: Update, context: CallbackContext):
         [InlineKeyboardButton("🛒 Comprar agora", url=product["link"])]
     ])
 
-    # Se tiver imagem manda foto
     if product["image"]:
         update.message.reply_photo(
             photo=product["image"],
