@@ -25,41 +25,6 @@ GROUP_ID = -1003761262254
 ADMIN_ID = 7198780258
 
 # =========================
-# PEGAR IMAGEM
-# =========================
-
-def get_image(soup):
-
-    img = soup.find("meta", property="og:image")
-
-    if img and img.get("content"):
-        return img["content"]
-
-    return None
-
-# =========================
-# PEGAR PREÇO
-# =========================
-
-def extract_price(soup):
-
-    text = soup.get_text()
-
-    patterns = [
-        r"R\$\s?\d+[.,]?\d*",
-        r"\d+[.,]\d{2}"
-    ]
-
-    for p in patterns:
-
-        match = re.search(p, text)
-
-        if match:
-            return match.group()
-
-    return "Preço não encontrado"
-
-# =========================
 # SCRAPER
 # =========================
 
@@ -142,15 +107,10 @@ def scrape_product(url):
         html = soup.prettify()
 
         patterns = [
-
             r'R\$\s?\d+[.,]\d{2}',
-
             r'"salePrice":"(.*?)"',
-
             r'"price":"(.*?)"',
-
             r'"minPrice":"(.*?)"',
-
             r'"maxPrice":"(.*?)"'
         ]
 
@@ -188,9 +148,6 @@ def scrape_product(url):
             "link": url
         }
 
-    l
-        }
-
 # =========================
 # FORMATAR MSG
 # =========================
@@ -208,7 +165,7 @@ def format_message(p):
 """
 
 # =========================
-# MENSAGEM
+# HANDLE MSG
 # =========================
 
 async def handle_message(
@@ -467,4 +424,4 @@ print("BOT ONLINE")
 
 app.run_polling(
     drop_pending_updates=True
-        )
+            )
